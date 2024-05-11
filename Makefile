@@ -1,5 +1,5 @@
-CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT -g
-LIBS    := -lmicrohttpd -lmagic -lpthread
+CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT -DLOG_USE_COLOR -g
+LIBS    := -lmicrohttpd -lpthread
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
 
@@ -19,19 +19,20 @@ endif
 
 CC := gcc
 
-all: httpdserver test
+all: httpdserver
 
-httpdserver: httpd.o
-	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
-
-test: http-test.o
+httpdserver: httpd.o log.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 httpd.o: httpd.c
 	$(CC) $(CFLAGS) -c -o $@ $<
-
-http-test.o: httpd-test.c
+log.o: log.c
 	$(CC) $(CFLAGS) -c -o $@ $<
+# test: http-test.o
+# 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
+
+# http-test.o: httpd-test.c
+# 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
 	rm -f httpdserver test *.o
