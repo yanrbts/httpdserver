@@ -24,29 +24,32 @@
 #include <locale.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <getopt.h>
+#include <error.h>
 #include <microhttpd.h>
 #include "log.h"
 
-#define PORT 8080
-#define UPLOAD_DIR "uploads"
-#define POSTBUFFERSIZE 4096
-#define GET             0
-#define POST            1
-#define MAXCLIENTS      5
-#define DEFAULT_DIR     "kxykworks"
-#define TIME_FORMAT     "%Y-%m-%d %H:%M:%S"
+#define AUTHORS             "Written by Yan Ruibing."
+#define PACKAGE_VERSION     "0.0.1"
+#define PORT                8080
+#define POSTBUFFERSIZE      4096
+#define GET                 0
+#define POST                1
+#define MAXCLIENTS          5
+#define DEFAULT_DIR         "kxykworks"
+#define TIME_FORMAT         "%Y-%m-%d %H:%M:%S"
 
 char *ascii_logo ="\n" 
 "    __   ______    __  __ \n"     
 "   / /__/ __/ /_  / /_/ /_____    | PID : %d\n"
 "  / //_/ /_/ __ \\/ __/ __/ __ \\   | Port: %d\n"
 " / ,< / __/ / / / /_/ /_/ /_/ /   | Author: yanruibing\n"
-"/_/|_/_/ /_/ /_/\\__/\\__/ .___/    | Version: 1.0.0\n"
+"/_/|_/_/ /_/ /_/\\__/\\__/ .___/    | Version: %s\n"
 "                      /_/      \n\n";
 
-static unsigned int uploading_clients = 0;
+// static unsigned int uploading_clients = 0;
 static char homedir[512];
-static char *subdir = NULL;
+// static char *subdir = NULL;
 
 struct connection_info_struct {
     int connectiontype;
@@ -56,6 +59,16 @@ struct connection_info_struct {
     const char *url;
     int answercode;
 };
+
+struct server {
+    char *logfile;  /*log file*/
+    int port;       /* server port */
+    int daemonize;  /* Whether to daemonize, 1 or 0*/
+    char *subdir;   /* User working subdirectory */
+    uint64_t uploading_clients_num; /*Number of clients being uploaded*/
+};
+
+struct server hserver;
 
 const char *askpage = "<html><body>\n\
                        Upload a file, please!<br>\n\
@@ -98,7 +111,7 @@ static int
 check_dir_vaild(const char *dir) {
     char buffer[PATH_MAX] = {0};
 
-    snprintf(buffer, sizeof(buffer), "%s/%s%s", homedir, subdir ? subdir : DEFAULT_DIR, dir);
+    snprintf(buffer, sizeof(buffer), "%s/%s%s", homedir, hserver.subdir, dir);
     if (access(buffer, F_OK) != -1) {
         return 1;
     }
@@ -141,7 +154,7 @@ iterate_post (void *cls, enum MHD_ValueKind kind, const char *key,
     if (!con_info->fp) {
         snprintf(filepath, sizeof(filepath), "%s/%s%s/%s", 
                     homedir, 
-                    subdir ? subdir : DEFAULT_DIR,
+                    hserver.subdir,
                     con_info->url, 
                     filename);
         // log_info("(%s) %s", con_info->url+1, filepath);
@@ -186,7 +199,7 @@ request_completed (void *cls, struct MHD_Connection *connection,
     if (con_info->connectiontype == POST) {
         if (con_info->postprocessor != NULL) {
             MHD_destroy_post_processor (con_info->postprocessor);
-            uploading_clients--;
+            hserver.uploading_clients_num--;
             log_info("close client.");
         }
 
@@ -207,7 +220,7 @@ answer_to_connection (void *cls, struct MHD_Connection *connection,
     if (*con_cls == NULL) {
         struct connection_info_struct *con_info;
 
-        if (uploading_clients >= MAXCLIENTS)
+        if (hserver.uploading_clients_num >= MAXCLIENTS)
             return send_page(connection, busypage, MHD_HTTP_SERVICE_UNAVAILABLE);
         
         con_info = malloc(sizeof(struct connection_info_struct));
@@ -225,7 +238,7 @@ answer_to_connection (void *cls, struct MHD_Connection *connection,
                 free(con_info);
                 return MHD_NO;
             }
-            uploading_clients++;
+            hserver.uploading_clients_num++;
             con_info->connectiontype = POST;
             con_info->answercode = MHD_HTTP_OK;
             con_info->answerstring = completepage;
@@ -240,7 +253,7 @@ answer_to_connection (void *cls, struct MHD_Connection *connection,
     if (strcmp(method, "GET") == 0) {
         char buffer[1024];
 
-        sprintf (buffer, askpage, uploading_clients);
+        sprintf(buffer, askpage, hserver.uploading_clients_num);
         return send_page(connection, buffer, MHD_HTTP_OK);
     }
 
@@ -279,20 +292,110 @@ void daemonize(void) {
     }
 }
 
+static void
+inti_server() {
+    hserver.daemonize = 0;
+    hserver.logfile = NULL;
+    hserver.port = PORT;
+    hserver.subdir = DEFAULT_DIR;
+    hserver.uploading_clients_num = 0;
+}
+
+static void usage() {
+    printf ("Usage: [OPTION]... \n"
+                "list file interface contents\n\n"
+                "  -p,              Server port(The default is 8080).\n"
+                "  -f,              Log file (If not set it will be displayed on the screen).\n"
+                "  -s,              User working subdirectory.\n"
+                "  -b,              Whether to daemonize.\n"
+                "      --help       display this help and exit.\n"
+                "      --version    output version information and exit.\n\n"
+                "Examples:\n"
+                "  httpdserver -p 8080\n\n");
+}
+
+static struct option const long_options[] = {
+    {"version", no_argument, NULL, 'v'},
+    {"help", no_argument, NULL, 'h'},
+    {NULL, no_argument, NULL, 0}
+};
+
 int main(int argc, char **argv) {
     pid_t pid;
     struct MHD_Daemon *daemon;
+    int ret = -1;
+    int opt = 0;
+    int option_index = 0;
+    FILE *logfp = NULL;
+
+    /* First initialize the server, and then decide to modify 
+     * the parameters from the input parameters to prevent 
+     * violation of initialization.*/
+    inti_server();
+
+    if (argv[argc-1] == NULL || argv[argc-1][0] == '\0') {
+        fprintf(stderr, "Invalid command line arguments\n");
+        goto err;
+    }
+
+    optind = 0;
+    while (1) {
+        opt = getopt_long(argc, argv, "p:f:s:bhv", long_options, &option_index);
+
+        if (opt == -1) break;
+
+        switch (opt) {
+        case 'p':
+            if (optarg)
+                hserver.port = atoi(optarg);
+            break;
+        case 'f':
+            if (optarg)
+                hserver.logfile = strdup(optarg);
+            break;
+        case 's':
+            hserver.subdir = strdup(optarg);
+            break;
+        case 'b':
+            hserver.daemonize = 1;
+            break;
+        case 'v':
+            printf ("%s (%s) %s\n", argv[0], PACKAGE_VERSION, AUTHORS);
+            goto out;
+        case 'h':
+            usage();
+            goto out;
+        default:
+            goto err;
+        }
+    }
+
+    if (optind < argc) {
+        error(0, 0, "missing operand");
+        goto err;
+    }
 
     setlocale(LC_COLLATE, "");
     
     pid = getpid();
-    printf(ascii_logo, pid, PORT);
+    printf(ascii_logo, pid, hserver.port, PACKAGE_VERSION);
+
     get_home_dir();
 
-    log_info("kfhttp server run (pid=%d, port=%d).", pid, PORT);
-    daemonize();
+    if (hserver.logfile) {
+        logfp = fopen(hserver.logfile, "a+");
+        if (logfp) {
+            log_add_fp(logfp, LOG_INFO | LOG_TRACE);
+            log_set_quiet(1);
+        } else {
+            log_error("Failed to open or create the %s log file.", hserver.logfile);
+        }
+    }
+
+    log_info("kfhttp server run (pid=%d, port=%d).", pid, hserver.port);
+    // daemonize();
     daemon = MHD_start_daemon(MHD_USE_EPOLL_INTERNALLY | MHD_USE_DEBUG, 
-                                PORT, NULL, NULL,
+                                hserver.port, NULL, NULL,
                                 &answer_to_connection, NULL,
                                 MHD_OPTION_NOTIFY_COMPLETED, 
                                 request_completed,
@@ -303,6 +406,12 @@ int main(int argc, char **argv) {
     }
 
     getchar();
+    if (logfp) fclose(logfp);
     MHD_stop_daemon(daemon);
     return 0;
+
+err:
+    error(0, 0, "Try user --help for more information.");
+out:
+    return ret;
 }
