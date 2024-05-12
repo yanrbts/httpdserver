@@ -7,4 +7,4 @@ def upload_file(url, filename):
     print(response.text)
 
 if __name__ == '__main__':
-    upload_file('http://127.0.0.1:8888/user12', './uploads/htt.txt')
+    upload_file('http://127.0.0.1:8080/user12', './uploads/ttt.txt')

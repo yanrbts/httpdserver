@@ -10,7 +10,7 @@ else ifeq ($(TARGET), darwin)
 	export MACOSX_DEPLOYMENT_TARGET = $(shell sw_vers -productVersion)
 else ifeq ($(TARGET), linux)
 	CFLAGS  += -D_POSIX_C_SOURCE=200112L -D_BSD_SOURCE -D_DEFAULT_SOURCE
-	LIBS    += -ldl
+	# LIBS    += -ldl
 	LDFLAGS += -Wl,-E
 else ifeq ($(TARGET), freebsd)
 	CFLAGS  += -D_DECLARE_C99_LDBL_MATH
