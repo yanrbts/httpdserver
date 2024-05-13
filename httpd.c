@@ -46,7 +46,7 @@ char *ascii_logo ="\n"
 "  / //_/ /_/ __ \\/ __/ __/ __ \\   | Port: %d\n"
 " / ,< / __/ / / / /_/ /_/ /_/ /   | Author: yanruibing\n"
 "/_/|_/_/ /_/ /_/\\__/\\__/ .___/    | Version: %s\n"
-"                      /_/      \n\n";
+"                      /_/         | microhttpd version: %s\n\n";
 
 // static unsigned int uploading_clients = 0;
 static char homedir[512];
@@ -461,7 +461,7 @@ int main(int argc, char **argv) {
     setupSignalHandlers();
     
     pid = getpid();
-    printf(ascii_logo, pid, hserver.port, PACKAGE_VERSION);
+    printf(ascii_logo, pid, hserver.port, PACKAGE_VERSION, MHD_get_version());
 
     get_home_dir();
 

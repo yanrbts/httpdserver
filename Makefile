@@ -1,5 +1,5 @@
 CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT -DLOG_USE_COLOR -g
-LIBS    := -lmicrohttpd -lpthread
+LIBS    := -lpthread  -L./lib -lmicrohttpd -lgnutls
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
 
@@ -28,11 +28,6 @@ httpd.o: httpd.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 log.o: log.c
 	$(CC) $(CFLAGS) -c -o $@ $<
-# test: http-test.o
-# 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
-
-# http-test.o: httpd-test.c
-# 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	rm -f httpdserver test *.o
+	rm -f httpdserver *.o
