@@ -170,7 +170,7 @@ iterate_post(void *cls, enum MHD_ValueKind kind, const char *key,
             fclose(fp);
             con_info->answerstring = fileexistspage;
             con_info->answercode = MHD_HTTP_FORBIDDEN;
-            log_error("kfhttp server Forbidden 403.");
+            log_warn("(%s) The file '%s' already exists.", con_info->url+1, filename);
             return MHD_NO;
         }
         if (check_dir_vaild(con_info->url)) {
