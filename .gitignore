@@ -1,9 +1,2 @@
-.*.swp
 *.o
-*.log
 httpdserver
-.make-*
-.prerequisites
-*.dSYM
-Makefile.dep
-uploads

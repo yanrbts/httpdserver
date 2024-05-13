@@ -46,7 +46,7 @@ char *ascii_logo ="\n"
 "  / //_/ /_/ __ \\/ __/ __/ __ \\   | Port: %d\n"
 " / ,< / __/ / / / /_/ /_/ /_/ /   | Author: yanruibing\n"
 "/_/|_/_/ /_/ /_/\\__/\\__/ .___/    | Version: %s\n"
-"                      /_/         | microhttpd version: %s\n\n";
+"                      /_/         \n\n";
 
 // static unsigned int uploading_clients = 0;
 static char homedir[512];
@@ -59,6 +59,10 @@ struct connection_info_struct {
     const char *answerstring;
     const char *url;
     int answercode;
+    int uploadnum; /* Represents the number of uploads. 
+                    * Large files will be uploaded multiple times, 
+                    * and the log will only be printed for the first time.*/
+    long long consumtime; /* Request takes time */
 };
 
 struct server {
@@ -71,26 +75,28 @@ struct server {
 
 struct server hserver;
 
-const char *askpage = "<html><body>\n\
-                       Upload a file, please!<br>\n\
-                       There are %u clients uploading at the moment.<br>\n\
-                       <form action=\"/filepost\" method=\"post\" enctype=\"multipart/form-data\">\n\
-                       <input name=\"file\" type=\"file\">\n\
-                       <input type=\"submit\" value=\" Send \"></form>\n\
-                       </body></html>";
-
 const char *busypage =
-  "This server is busy, please try again later.";
-
+    "{\"action\":\"BUSY\", \"msg\":\"This server is busy, please try again later.\"}";
 const char *completepage =
-  "The upload has been completed.";
-
+    "{\"action\":\"COMPLETE\", \"msg\":\"The upload has been completed.\"}";
 const char *errorpage =
-  "This doesn't seem to be right.";
+    "{\"action\":\"ERROR\", \"msg\":\"This doesn't seem to be right.\"}";
 const char *servererrorpage =
-  "An internal server error has occured.";
-const char *fileexistspage =
-  "This file already exists.";
+    "{\"action\":\"SERVERERROR\", \"msg\":\"An internal server error has occured.\"}";
+const char *fileexistspage = 
+    "{\"action\":\"EXIST\", \"msg\":\"This file already exists.\"}";
+
+
+/* Return the UNIX time in microseconds */
+static long long ustime(void) {
+    struct timeval tv;
+    long long ust;
+
+    gettimeofday(&tv, NULL);
+    ust = ((long long)tv.tv_sec)*1000000;
+    ust += tv.tv_usec;
+    return ust;
+}
 
 static void
 get_home_dir() {
@@ -184,7 +190,10 @@ iterate_post (void *cls, enum MHD_ValueKind kind, const char *key,
     }
     con_info->answerstring = completepage;
     con_info->answercode = MHD_HTTP_OK;
-    log_info("(%s) %s upload successful.", con_info->url+1, filepath);
+    if (con_info->uploadnum == 0)
+        log_info("(%s) %s uploading..", con_info->url+1, filepath);
+    con_info->uploadnum++;
+
     return MHD_YES;
 }
 
@@ -192,6 +201,7 @@ static void
 request_completed (void *cls, struct MHD_Connection *connection,
                    void **con_cls, enum MHD_RequestTerminationCode toe)
 {
+    long long timestamp = 0;
     struct connection_info_struct *con_info = *con_cls;
 
     if (con_info == NULL)
@@ -201,15 +211,17 @@ request_completed (void *cls, struct MHD_Connection *connection,
         if (con_info->postprocessor != NULL) {
             MHD_destroy_post_processor (con_info->postprocessor);
             hserver.uploading_clients_num--;
-            log_info("close client.");
+            log_info("(%s) upload finish.", con_info->url+1);
         }
 
         if (con_info->fp)
             fclose(con_info->fp);
     }
+    timestamp = ustime() - con_info->consumtime;
     free(con_info);
     *con_cls = NULL;
-    log_trace("(%s) Request completed.", con_info->url+1);
+     
+    log_trace("(%s) Request completed, time take(%.2fs)", con_info->url+1, (double)timestamp/1000000.0);
 }
 
 static int
@@ -229,6 +241,8 @@ answer_to_connection (void *cls, struct MHD_Connection *connection,
             return MHD_NO;
         con_info->fp = NULL;
         con_info->url = url;
+        con_info->uploadnum = 0;
+        con_info->consumtime = ustime();
 
         if (strcmp(method, "POST") == 0) {
             con_info->postprocessor = MHD_create_post_processor(connection, 
@@ -251,12 +265,12 @@ answer_to_connection (void *cls, struct MHD_Connection *connection,
         return MHD_YES;
     }
 
-    if (strcmp(method, "GET") == 0) {
-        char buffer[1024];
+    // if (strcmp(method, "GET") == 0) {
+    //     char buffer[1024];
 
-        sprintf(buffer, askpage, hserver.uploading_clients_num);
-        return send_page(connection, buffer, MHD_HTTP_OK);
-    }
+    //     sprintf(buffer, askpage, hserver.uploading_clients_num);
+    //     return send_page(connection, buffer, MHD_HTTP_OK);
+    // }
 
     if (strcmp(method, "POST") == 0) {
         struct connection_info_struct *con_info = *con_cls;
@@ -363,17 +377,6 @@ void setupSignalHandlers(void) {
     return;
 }
 
-/* Return the UNIX time in microseconds */
-static long long ustime(void) {
-    struct timeval tv;
-    long long ust;
-
-    gettimeofday(&tv, NULL);
-    ust = ((long long)tv.tv_sec)*1000000;
-    ust += tv.tv_usec;
-    return ust;
-}
-
 static void usage() {
     printf ("\nUsage: [OPTION]... \n"
                 "list file interface contents\n\n"
@@ -384,7 +387,7 @@ static void usage() {
                 "      --help       display this help and exit.\n"
                 "      --version    output version information and exit.\n\n"
                 "Examples:\n"
-                "  httpdserver -p 8080\n\n");
+                "  httpdserver -p 8080 -f log.txt -s subdir\n\n");
 }
 
 static struct option const long_options[] = {
@@ -461,7 +464,7 @@ int main(int argc, char **argv) {
     setupSignalHandlers();
     
     pid = getpid();
-    printf(ascii_logo, pid, hserver.port, PACKAGE_VERSION, MHD_get_version());
+    printf(ascii_logo, pid, hserver.port, PACKAGE_VERSION);
 
     get_home_dir();
 
@@ -495,7 +498,9 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    getchar();
+    while (1) {
+        sleep(1);
+    }
     if (logfp) fclose(logfp);
     MHD_stop_daemon(daemon);
     destroy_server();

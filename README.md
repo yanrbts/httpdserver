@@ -12,9 +12,9 @@ Description: Brief description of the program and its purpose.
 - libmicrohttpd (version X.X.X)
 - libgnutls (version X.X.X)
 
-## Installing libgnutls30
+## Installing Dependencies
 
-### Installing libgnutls30 on CentOS
+### Installing on CentOS
 
 1. CentOS command:
 
@@ -22,7 +22,7 @@ Description: Brief description of the program and its purpose.
    sudo yum install libmicrohttpd-devel
    sudo yum install libgnutls30
 
-### Installing libgnutls30 on Ubuntu
+### Installing on Ubuntu
 
 2. Ubuntu command:
 

@@ -7,4 +7,4 @@ def upload_file(url, filename):
     print(response.text)
 
 if __name__ == '__main__':
-    upload_file('http://192.168.3.140:8080/user1', './uploads/libc.pdf')
+    upload_file('http://192.168.3.140:8080/user1', '/home/yrb/ctf-debug.log')
