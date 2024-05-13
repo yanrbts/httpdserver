@@ -27,7 +27,7 @@
 #include <getopt.h>
 #include <error.h>
 #include <signal.h>
-#include <microhttpd.h>
+#include "microhttpd.h"
 #include "log.h"
 
 #define AUTHORS             "Written by Yan Ruibing."
@@ -142,8 +142,8 @@ send_page(struct MHD_Connection *connection, const char *page, int status_code)
     return ret;
 }
 
-static int
-iterate_post (void *cls, enum MHD_ValueKind kind, const char *key,
+static enum MHD_Result
+iterate_post(void *cls, enum MHD_ValueKind kind, const char *key,
               const char *filename, const char *content_type,
               const char *transfer_encoding, const char *data, uint64_t off,
               size_t size)
@@ -224,7 +224,7 @@ request_completed (void *cls, struct MHD_Connection *connection,
     log_trace("(%s) Request completed, time take(%.2fs)", con_info->url+1, (double)timestamp/1000000.0);
 }
 
-static int
+static enum MHD_Result
 answer_to_connection (void *cls, struct MHD_Connection *connection,
                       const char *url, const char *method,
                       const char *version, const char *upload_data,

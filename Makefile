@@ -19,9 +19,9 @@ endif
 
 CC := gcc
 
-all: httpdserver
+all: kfhttp
 
-httpdserver: httpd.o log.o
+kfhttp: httpd.o log.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 httpd.o: httpd.c
@@ -30,4 +30,4 @@ log.o: log.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	rm -f httpdserver *.o
+	rm -f kfhttp *.o
