@@ -233,8 +233,8 @@ answer_to_connection (void *cls, struct MHD_Connection *connection,
     if (*con_cls == NULL) {
         struct connection_info_struct *con_info;
 
-        if (hserver.uploading_clients_num >= MAXCLIENTS)
-            return send_page(connection, busypage, MHD_HTTP_SERVICE_UNAVAILABLE);
+        // if (hserver.uploading_clients_num >= MAXCLIENTS)
+        //     return send_page(connection, busypage, MHD_HTTP_SERVICE_UNAVAILABLE);
         
         con_info = malloc(sizeof(struct connection_info_struct));
         if (con_info == NULL)
@@ -455,7 +455,7 @@ int main(int argc, char **argv) {
     setlocale(LC_COLLATE, "");
 
     /* When a terminal disconnect (hangup) occurs, 
-     * this signal is sent to the controlling process of the termin*/
+     * this signal is sent to the controlling process of the termin*/
     signal(SIGHUP, SIG_IGN);
     /* If we write to a pipeline but the reader has terminated, SIGPIPE is
      * generated. This signal is also generated when a process writes to 
@@ -471,7 +471,7 @@ int main(int argc, char **argv) {
     if (hserver.logfile) {
         logfp = fopen(hserver.logfile, "a+");
         if (logfp) {
-            log_add_fp(logfp, LOG_INFO | LOG_TRACE);
+            log_add_fp(logfp, LOG_INFO | LOG_TRACE | LOG_ERROR | LOG_FATAL);
             log_set_quiet(1);
         } else {
             log_error("Failed to open or create the %s log file.", hserver.logfile);
